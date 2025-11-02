@@ -1,5 +1,3 @@
-# crime_pipeline_ultra.py
-# Ultra-enhanced version with maximum crime diversity
 import os, math
 from pathlib import Path
 import pandas as pd
@@ -21,11 +19,9 @@ print("🚨 DELHI CRIME PREDICTION - ULTRA-DIVERSE CRIME MAPPING")
 print("=" * 70)
 print(f"\n📍 Loaded {len(df)} police stations from Delhi")
 
-# Crime columns
 crime_columns = ['murder', 'rape', 'gangrape', 'robbery', 'theft', 'assualt murders', 'sexual harassement']
 crime_columns = [col for col in crime_columns if col in df.columns]
 
-# Show original distribution
 print(f"\n📊 Original Crime Statistics:")
 crime_totals = {}
 for crime in crime_columns:
@@ -33,29 +29,25 @@ for crime in crime_columns:
     crime_totals[crime] = total
     print(f"  {crime:25s}: {total:>6,} incidents")
 
-# AGGRESSIVE weighting to force diversity
-# Strategy: Use inverse proportion with heavy boost
 max_count = max(crime_totals.values())
 min_count = min([v for v in crime_totals.values() if v > 0])
 
-# Ultra-aggressive weights (exponential boost for rare crimes)
 weights = {}
 for crime in crime_columns:
     if crime_totals[crime] > 0:
-        # Square root of inverse ratio, then multiply by 3 for extra boost
         ratio = max_count / crime_totals[crime]
-        weights[crime] = min(20.0, math.sqrt(ratio) * 3.0)  # Cap at 20x
+        weights[crime] = min(20.0, math.sqrt(ratio) * 3.0)
     else:
         weights[crime] = 1.0
 
 # Manual override for specific crimes to ensure visibility
-weights['murder'] = 20.0  # Maximum boost
+weights['murder'] = 20.0 
 weights['rape'] = 15.0
 weights['gangrape'] = 18.0
 weights['robbery'] = 8.0
 weights['sexual harassement'] = 15.0
 weights['assualt murders'] = 12.0
-weights['theft'] = 1.0  # Keep normal
+weights['theft'] = 1.0 
 
 print(f"\n⚖️  Ultra-Aggressive Crime Weighting:")
 for crime in sorted(weights.keys(), key=lambda x: weights[x], reverse=True):
@@ -265,7 +257,3 @@ print(f"✅ Diversity score: {unique_crimes}/{len(crime_columns)}")
 print("\n" + "=" * 70)
 print("🎉 PIPELINE COMPLETE - MAXIMUM CRIME DIVERSITY ACHIEVED!")
 print("=" * 70)
-print("\n🚀 Next Steps:")
-print("  1. Start API: uvicorn predict_api:app --reload")
-print("  2. Run App: streamlit run app_improved.py")
-print("\n💡 Tip: Your dropdown should now show ALL crime types!")
