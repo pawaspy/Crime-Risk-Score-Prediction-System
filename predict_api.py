@@ -1,0 +1,72 @@
+# predict_api.py
+from fastapi import FastAPI
+from pydantic import BaseModel
+import joblib
+import numpy as np
+import pandas as pd
+from pathlib import Path
+
+app = FastAPI(title="Crime Risk Prediction API")
+
+# Load models and artifacts
+MODEL_DIR = Path("models")
+reg_model = joblib.load(MODEL_DIR / "xgboost_reg.joblib")
+clf_model = joblib.load(MODEL_DIR / "xgboost_clf.joblib")
+scaler = joblib.load(MODEL_DIR / "scaler.joblib")
+le_top = joblib.load(MODEL_DIR / "le_top.joblib")  # unified naming
+agg = pd.read_csv(MODEL_DIR / "grid_aggregated.csv")
+
+class CrimeQuery(BaseModel):
+    lat: float
+    lon: float
+    hour: int = 12
+    top_crime_type: str = "Unknown"
+
+@app.get("/")
+def home():
+    return {"message": "✅ Crime Risk Prediction API is running!"}
+
+@app.post("/predict")
+def predict_risk(q: CrimeQuery):
+    # Find nearest grid cell
+    nearest = agg.loc[((agg['lat_grid'] - q.lat).abs() + (agg['lon_grid'] - q.lon).abs()).idxmin()]
+
+    # Handle unseen crime types gracefully
+    if q.top_crime_type not in le_top.classes_:
+        safe_type = le_top.classes_[0]  # fallback to first known class
+    else:
+        safe_type = q.top_crime_type
+
+    top_code = int(le_top.transform([safe_type])[0])
+
+    # Feature vector
+    features = np.array([[
+        nearest["total_crimes"],
+        nearest["unique_crime_types"],
+        q.hour if 0 <= q.hour <= 23 else nearest.get("mean_hour", 12),
+        nearest.get("std_hour", 0),
+        nearest.get("night_prop", 0),
+        top_code
+    ]])
+
+    # Scale numeric features (excluding top_crime_code)
+    features_scaled = scaler.transform(features[:, :-1])
+    X_input = np.hstack([features_scaled, features[:, -1].reshape(-1, 1)])
+
+    # Predictions
+    risk_score = float(reg_model.predict(X_input)[0])
+    risk_type_code = int(clf_model.predict(X_input)[0])
+    risk_type_label = ["low", "medium", "high"][risk_type_code] if risk_type_code < 3 else "unknown"
+
+    return {
+        "input": q.dict(),
+        "nearest_grid": {
+            "lat_grid": float(nearest["lat_grid"]),
+            "lon_grid": float(nearest["lon_grid"]),
+            "top_crime_type": str(nearest["top_crime_type"]),
+        },
+        "prediction": {
+            "risk_score": round(risk_score, 4),
+            "risk_type": risk_type_label,
+        },
+    }

@@ -1,0 +1,15 @@
+fastapi
+uvicorn
+pandas
+numpy
+scikit-learn
+xgboost
+lightgbm
+joblib
+streamlit
+folium
+streamlit-folium
+requests
+plotly
+branca
+streamlit-authenticator
