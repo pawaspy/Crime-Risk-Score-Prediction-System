@@ -13,3 +13,4 @@ requests
 plotly
 branca
 streamlit-authenticator
+geopy
