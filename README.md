@@ -555,31 +555,6 @@ delhi-crime-prediction/
 
 ---
 
-## 🚀 Future Enhancements
-
-### Short-term Goals
-- [ ] Add weather data integration
-- [ ] Implement user authentication
-- [ ] Mobile app development
-- [ ] Real-time crime data updates
-- [ ] Email/SMS alerts for high-risk areas
-
-### Medium-term Goals
-- [ ] Deep learning models (LSTM, GNN)
-- [ ] Demographic data integration
-- [ ] Multi-city support (Mumbai, Bangalore)
-- [ ] Historical trend analysis
-- [ ] Crime prediction (next 7 days)
-
-### Long-term Vision
-- [ ] Government partnership for live data
-- [ ] Public API with rate limiting
-- [ ] Mobile emergency response integration
-- [ ] Community reporting features
-- [ ] AI-powered police patrol optimization
-
----
-
 ## 🤝 Contributing
 
 We welcome contributions from the community! Here's how you can help:
@@ -629,10 +604,10 @@ git push origin feature/amazing-feature
 ---
 
 ### Report Issues
-Found a bug? [Open an issue](https://github.com/yourusername/delhi-crime-prediction/issues)
+Found a bug? [Open an issue](https://github.com/pawaspy/delhi-crime-prediction/issues)
 
 ### Feature Requests
-Have an idea? [Start a discussion](https://github.com/yourusername/delhi-crime-prediction/discussions)
+Have an idea? [Start a discussion](https://github.com/pawaspy/delhi-crime-prediction/discussions)
 
 ---
 
