@@ -116,7 +116,7 @@ def get_diverse_top_crime(crime_series):
     return top_crime
 
 # Group and aggregate
-group = df_expanded.groupby(["lat_grid", "lon_grid"])
+group = df_expanded.groupby(["lat_grid", "lon_grid", "area"])
 
 agg = group.agg(
     total_crimes=("hour", "count"),
@@ -131,7 +131,9 @@ agg_hours = group["hour"].agg(
     night_prop=lambda x: ((x >= 0) & (x <= 6)).sum() / len(x) if len(x) > 0 else 0
 ).reset_index()
 
-agg = agg.merge(agg_hours, on=["lat_grid", "lon_grid"], how="left")
+# Merge on lat_grid, lon_grid, and area (important)
+agg = agg.merge(agg_hours, on=["lat_grid", "lon_grid", "area"], how="left")
+agg.rename(columns={"area": "nm_pol"}, inplace=True)
 agg.fillna({"mean_hour": 12, "std_hour": 0, "night_prop": 0}, inplace=True)
 
 # Risk features

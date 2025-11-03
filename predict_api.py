@@ -59,14 +59,19 @@ def predict_risk(q: CrimeQuery):
     risk_type_label = ["low", "medium", "high"][risk_type_code] if risk_type_code < 3 else "unknown"
 
     return {
-        "input": q.dict(),
-        "nearest_grid": {
-            "lat_grid": float(nearest["lat_grid"]),
-            "lon_grid": float(nearest["lon_grid"]),
-            "top_crime_type": str(nearest["top_crime_type"]),
-        },
-        "prediction": {
-            "risk_score": round(risk_score, 4),
-            "risk_type": risk_type_label,
-        },
-    }
+    "input": q.dict(),
+    "nearest_grid": {
+        "lat_grid": float(nearest["lat_grid"]),
+        "lon_grid": float(nearest["lon_grid"]),
+        "nm_pol": str(nearest.get("nm_pol", "Unknown")),
+        "top_crime_type": str(nearest.get("top_crime_type", "Unknown")),
+        "total_crimes": int(nearest.get("total_crimes", 0)),
+        "risk_type": str(nearest.get("risk_type", "unknown")),
+        "risk_score_data": float(nearest.get("risk_score", 0)),
+    },
+    "prediction": {
+        "risk_score": round(risk_score, 4),
+        "risk_type": risk_type_label,
+    },
+}
+

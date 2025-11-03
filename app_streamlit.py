@@ -158,28 +158,34 @@ with tab1:
         zoom_start=12,
         tiles="cartodb dark_matter"
     )
-    
     for _, r in agg.iterrows():
         color = "red" if r["risk_score"] > 0.66 else ("orange" if r["risk_score"] > 0.33 else "green")
-        folium.CircleMarker(
+    
+        area_name = r["nm_pol"] if "nm_pol" in r and pd.notna(r["nm_pol"]) else "Unknown"
+
+        popup_html = f"""
+        <div style="font-family: Arial; width: 220px;">
+            <h4 style="color: {color}; margin-bottom:4px;">⚠️ {r['risk_type'].upper()} RISK</h4>
+            <p><b>Area:</b> {area_name}</p>
+            <p><b>Score:</b> {r['risk_score']:.2f}</p>
+            <p><b>Total Crimes:</b> {int(r['total_crimes'])}</p>
+            <p><b>Top Crime:</b> {r['top_crime_type']}</p>
+            <p><b>Lat:</b> {r['lat_grid']:.4f}, <b>Lon:</b> {r['lon_grid']:.4f}</p>
+        </div>
+        """
+
+        folium.Marker(
             location=[r["lat_grid"], r["lon_grid"]],
-            radius=5 + 8 * r["risk_score"],
-            color=color,
-            fill=True,
-            fill_color=color,
-            fill_opacity=0.6,
-            popup=folium.Popup(
-                f"""
-                <div style="font-family: Arial; width: 200px;">
-                    <h4 style="color: {color};">⚠️ Risk: {r['risk_type'].upper()}</h4>
-                    <p><b>Score:</b> {r['risk_score']:.2f}</p>
-                    <p><b>Total Crimes:</b> {r['total_crimes']}</p>
-                    <p><b>Top Crime:</b> {r['top_crime_type']}</p>
-                </div>
-                """,
-                max_width=250
-            ),
+            popup=popup_html,
+            icon=folium.Icon(
+                color="red" if r["risk_type"] == "high" else 
+                    "orange" if r["risk_type"] == "medium" else 
+                    "green"
+            )
         ).add_to(m)
+
+
+
     
     folium.Marker(
         location=[selected_lat, selected_lon],
@@ -187,14 +193,27 @@ with tab1:
         icon=folium.Icon(color="blue", icon="info-sign")
     ).add_to(m)
     
+    m.location = [st.session_state.selected_lat, st.session_state.selected_lon]
+
     map_data = st_folium(m, width=None, height=600, key="main_map")
-    
     if map_data and map_data.get("last_clicked"):
         clicked_lat = map_data["last_clicked"]["lat"]
         clicked_lon = map_data["last_clicked"]["lng"]
+
         if clicked_lat and clicked_lon:
-            st.session_state.selected_lat = clicked_lat
-            st.session_state.selected_lon = clicked_lon
+            # Find nearest point from aggregated data
+            nearest_idx = ((agg["lat_grid"] - clicked_lat).abs() + (agg["lon_grid"] - clicked_lon).abs()).idxmin()
+            nearest_row = agg.loc[nearest_idx]
+
+            # Update session state
+            st.session_state.selected_lat = float(nearest_row["lat_grid"])
+            st.session_state.selected_lon = float(nearest_row["lon_grid"])
+            area_name = nearest_row.get("nm_pol", "Unknown Area")
+
+            # Show area name in sidebar (only after click)
+            st.sidebar.success(f"📍 Selected Area: {area_name}")
+            st.sidebar.info(f"Lat: {nearest_row['lat_grid']:.4f}, Lon: {nearest_row['lon_grid']:.4f}")
+
             st.rerun()
 
 with tab2:
