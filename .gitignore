@@ -6,6 +6,5 @@ predict_test.py
 streamlit_app.py
 __pycache__/
 venv/
-models/
 utils/
 app_streamlit_up.py
