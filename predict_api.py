@@ -8,6 +8,7 @@ from pathlib import Path
 
 from fastapi.middleware.cors import CORSMiddleware
 
+app = FastAPI(title="Crime Risk Prediction API")
 app.add_middleware(
     CORSMiddleware,
     allow_origins=["*"], 
@@ -15,8 +16,6 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"]
 )
-
-app = FastAPI(title="Crime Risk Prediction API")
 
 # Load models and artifacts
 MODEL_DIR = Path("models")
