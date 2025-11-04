@@ -6,6 +6,16 @@ import numpy as np
 import pandas as pd
 from pathlib import Path
 
+from fastapi.middleware.cors import CORSMiddleware
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"], 
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"]
+)
+
 app = FastAPI(title="Crime Risk Prediction API")
 
 # Load models and artifacts
@@ -13,7 +23,7 @@ MODEL_DIR = Path("models")
 reg_model = joblib.load(MODEL_DIR / "xgboost_reg.joblib")
 clf_model = joblib.load(MODEL_DIR / "xgboost_clf.joblib")
 scaler = joblib.load(MODEL_DIR / "scaler.joblib")
-le_top = joblib.load(MODEL_DIR / "le_top.joblib")  # unified naming
+le_top = joblib.load(MODEL_DIR / "le_top.joblib") 
 agg = pd.read_csv(MODEL_DIR / "grid_aggregated.csv")
 
 class CrimeQuery(BaseModel):
