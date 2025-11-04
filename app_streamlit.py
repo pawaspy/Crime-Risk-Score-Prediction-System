@@ -287,7 +287,7 @@ with tab3:
             "top_crime_type": selected_crime
         }
         
-        api_url = "http://127.0.0.1:8000/predict"
+        api_url = "https://crime-risk-score-prediction-system.onrender.com"
         
         with st.spinner("🔄 Analyzing crime risk..."):
             try:
