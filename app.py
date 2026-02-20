@@ -112,7 +112,7 @@ def load_models():
     return reg_model, clf_model, scaler, le_top
 
 reg_model, clf_model, scaler, le_top = load_models()
-explainer = get_explainer(reg_model)
+explainer = shap.TreeExplainer(reg_model)
 def predict_risk_local(lat, lon, hour, top_crime_type):
 
     # Efficient spatial lookup using H3
