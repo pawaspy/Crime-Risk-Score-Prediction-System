@@ -545,7 +545,7 @@ with tab5:
     sample_data = np.hstack([scaled_features, crime_code_column])
 
     #explainer = shap.TreeExplainer(reg_model)
-    shap_values = explainer(sample_data).values
+    shap_values_global = explainer(sample_data).values
 
     fig, ax = plt.subplots()
     shap.summary_plot(
