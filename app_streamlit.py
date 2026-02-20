@@ -1,6 +1,5 @@
 import streamlit as st
 import pandas as pd
-import requests
 from streamlit_folium import st_folium
 import folium
 import joblib
@@ -77,6 +76,50 @@ def load_data():
         return None
 
 agg = load_data()
+
+# Load ML artifacts
+@st.cache_resource
+def load_models():
+    MODEL_DIR = Path("models")
+    reg_model = joblib.load(MODEL_DIR / "xgboost_reg.joblib")
+    clf_model = joblib.load(MODEL_DIR / "xgboost_clf.joblib")
+    scaler = joblib.load(MODEL_DIR / "scaler.joblib")
+    le_top = joblib.load(MODEL_DIR / "le_top.joblib")
+    return reg_model, clf_model, scaler, le_top
+
+reg_model, clf_model, scaler, le_top = load_models()
+
+def predict_risk_local(lat, lon, hour, top_crime_type):
+
+    nearest = agg.loc[((agg['lat_grid'] - lat).abs() +
+                       (agg['lon_grid'] - lon).abs()).idxmin()]
+
+    if top_crime_type not in le_top.classes_:
+        safe_type = le_top.classes_[0]
+    else:
+        safe_type = top_crime_type
+
+    top_code = int(le_top.transform([safe_type])[0])
+
+    features = [[
+        nearest["total_crimes"],
+        nearest["unique_crime_types"],
+        hour if 0 <= hour <= 23 else 12,
+        nearest.get("std_hour", 0),
+        nearest.get("night_prop", 0)
+    ]]
+
+    features_scaled = scaler.transform(features)
+
+    import numpy as np
+    X_input = np.hstack([features_scaled, [[top_code]]])
+
+    risk_score = float(reg_model.predict(X_input)[0])
+    risk_type_code = int(clf_model.predict(X_input)[0])
+
+    risk_type_label = ["low", "medium", "high"][risk_type_code]
+
+    return risk_score, risk_type_label, nearest
 
 if agg is None:
     st.error("⚠️ Could not load data. Please run crime_pipeline_fixed.py first!")
@@ -280,29 +323,26 @@ with tab3:
     st.subheader("🎯 Prediction Results")
     
     if predict_clicked:
-        payload = {
-            "lat": selected_lat, 
-            "lon": selected_lon, 
-            "hour": selected_hour, 
-            "top_crime_type": selected_crime
-        }
-        
-        api_url = "https://crime-risk-score-prediction-system.onrender.com/predict"
-        
         with st.spinner("🔄 Analyzing crime risk..."):
             try:
-                resp = requests.post(api_url, json=payload, timeout=10)
-                if resp.status_code == 200:
-                    data = resp.json()
-                    st.session_state.prediction_result = data
-                else:
-                    st.error(f"❌ API Error: {resp.status_code} - {resp.text}")
-                    st.session_state.prediction_result = None
-            except Exception as e:
-                st.error(f"⚠️ Could not connect to API: {e}")
-                st.error("Make sure the API is running: `uvicorn predict_api:app --reload`")
-                st.session_state.prediction_result = None
+                score, label, nearest = predict_risk_local(
+                    selected_lat,
+                    selected_lon,
+                    selected_hour,
+                    selected_crime
+                )
     
+                st.session_state.prediction_result = {
+                    "prediction": {
+                        "risk_score": score,
+                        "risk_type": label
+                    },
+                    "nearest_grid": nearest.to_dict()
+                }
+    
+            except Exception as e:
+                st.error(f"Prediction error: {e}")
+                st.session_state.prediction_result = None    
     if st.session_state.prediction_result:
         data = st.session_state.prediction_result
         pred = data["prediction"]
