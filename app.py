@@ -407,7 +407,7 @@ with tab3:
     
         st.subheader("🧠 SHAP Local Explanation")
 
-    shap_values = explainer(X_input).values
+        shap_values = explainer(X_input).values
         
         feature_names = [
             "Total Crimes",
