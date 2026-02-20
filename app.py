@@ -112,10 +112,6 @@ def load_models():
     return reg_model, clf_model, scaler, le_top
 
 reg_model, clf_model, scaler, le_top = load_models()
-@st.cache_resource
-def get_explainer(model):
-    return shap.TreeExplainer(model)
-
 explainer = get_explainer(reg_model)
 def predict_risk_local(lat, lon, hour, top_crime_type):
 
