@@ -393,17 +393,21 @@ with tab3:
                         "risk_type": label,
                         "confidence": confidence
                     },
-                    "nearest_grid": nearest.to_dict()
+                    "nearest_grid": nearest.to_dict(),
+                    "X_input": X_input
                 }
     
             except Exception as e:
                 st.error(f"Prediction error: {e}")
                 st.session_state.prediction_result = None    
     if st.session_state.prediction_result:
+
+        data = st.session_state.prediction_result
+        X_input = data["X_input"]
+    
         st.subheader("🧠 SHAP Local Explanation")
 
-        #explainer = shap.TreeExplainer(reg_model)
-        shap_values = explainer(X_input).values
+    shap_values = explainer(X_input).values
         
         feature_names = [
             "Total Crimes",
@@ -541,7 +545,7 @@ with tab5:
     sample_data = np.hstack([scaled_features, crime_code_column])
 
     #explainer = shap.TreeExplainer(reg_model)
-    shap_values = explainer(X_input).values
+    shap_values = explainer(sample_data).values
 
     fig, ax = plt.subplots()
     shap.summary_plot(
