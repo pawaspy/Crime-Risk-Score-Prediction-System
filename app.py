@@ -86,7 +86,7 @@ RESOLUTION = 8
 
 # Create H3 index for each grid cell
 agg["h3_index"] = agg.apply(
-    lambda row: h3.geo_to_h3(row["lat_grid"], row["lon_grid"], RESOLUTION),
+    lambda row: h3.latlng_to_cell(row["lat_grid"], row["lon_grid"], RESOLUTION),
     axis=1
 )
 
@@ -120,7 +120,7 @@ explainer = get_explainer(reg_model)
 def predict_risk_local(lat, lon, hour, top_crime_type):
 
     # Efficient spatial lookup using H3
-    cell = h3.geo_to_h3(lat, lon, RESOLUTION)
+    cell = h3.latlng_to_cell(lat, lon, RESOLUTION)
 
     if cell in agg.index:
         nearest = agg.loc[cell]
@@ -295,7 +295,7 @@ with tab1:
 
         if clicked_lat and clicked_lon:
             # Find nearest point from aggregated data
-            cell = h3.geo_to_h3(clicked_lat, clicked_lon, RESOLUTION)
+            cell = h3.latlng_to_cell(clicked_lat, clicked_lon, RESOLUTION)
             
             if cell in agg.index:
                 nearest_row = agg.loc[cell]
