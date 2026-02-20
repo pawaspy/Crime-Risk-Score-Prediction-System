@@ -403,7 +403,7 @@ with tab3:
         st.subheader("🧠 SHAP Local Explanation")
 
         #explainer = shap.TreeExplainer(reg_model)
-        shap_values = explainer.shap_values(X_input)
+        shap_values = explainer(X_input).values
         
         feature_names = [
             "Total Crimes",
@@ -541,7 +541,7 @@ with tab5:
     sample_data = np.hstack([scaled_features, crime_code_column])
 
     #explainer = shap.TreeExplainer(reg_model)
-    shap_values_global = explainer.shap_values(sample_data)
+    shap_values = explainer(X_input).values
 
     fig, ax = plt.subplots()
     shap.summary_plot(
