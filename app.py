@@ -115,15 +115,14 @@ reg_model, clf_model, scaler, le_top = load_models()
 explainer = shap.TreeExplainer(reg_model)
 def predict_risk_local(lat, lon, hour, top_crime_type):
 
-    # Efficient spatial lookup using H3
     cell = h3.latlng_to_cell(lat, lon, RESOLUTION)
 
     if cell in agg.index:
-        nearest_row = agg.loc[cell]
-        if isinstance(nearest_row, pd.DataFrame):
-            nearest_row = nearest_row.iloc[0]
+        nearest = agg.loc[cell]
+        if isinstance(nearest, pd.DataFrame):
+            nearest = nearest.iloc[0]
     else:
-        nearest_row = agg.iloc[0]
+        nearest = agg.iloc[0]
 
     if top_crime_type not in le_top.classes_:
         safe_type = le_top.classes_[0]
@@ -132,32 +131,30 @@ def predict_risk_local(lat, lon, hour, top_crime_type):
 
     top_code = int(le_top.transform([safe_type])[0])
 
-    # Cyclical time encoding
     hour_sin = np.sin(2 * np.pi * hour / 24)
     hour_cos = np.cos(2 * np.pi * hour / 24)
 
     features = [[
-        nearest["total_crimes"],
-        nearest["unique_crime_types"],
+        float(nearest["total_crimes"]),
+        float(nearest["unique_crime_types"]),
         hour_sin,
         hour_cos,
-        nearest.get("night_prop", 0)
+        float(nearest.get("night_prop", 0))
     ]]
 
     features_scaled = scaler.transform(features)
 
     X_input = np.hstack([features_scaled, [[top_code]]])
 
-    # Regression
     risk_score = float(reg_model.predict(X_input)[0])
 
-    # Classification probabilities
     probs = clf_model.predict_proba(X_input)[0]
     risk_type_code = int(np.argmax(probs))
     risk_type_label = ["low", "medium", "high"][risk_type_code]
     confidence = float(np.max(probs))
 
     return risk_score, risk_type_label, confidence, nearest, X_input
+    
 @st.cache_data
 def compute_hour_curve(lat, lon, crime):
     hours = np.arange(24)
