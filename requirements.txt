@@ -6,7 +6,6 @@ scikit-learn
 xgboost
 lightgbm
 joblib
-streamlit
 folium
 streamlit-folium
 requests
@@ -14,3 +13,5 @@ plotly
 branca
 streamlit-authenticator
 geopy
+streamlit>=1.32.0
+altair>=5.0.0
