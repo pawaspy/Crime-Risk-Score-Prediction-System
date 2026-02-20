@@ -6,6 +6,11 @@ import joblib
 from pathlib import Path
 import plotly.express as px
 import plotly.graph_objects as go
+import numpy as np
+import h3
+import shap
+import matplotlib.pyplot as plt
+from sklearn.inspection import PartialDependenceDisplay
 
 # Page config
 st.set_page_config(
@@ -77,6 +82,25 @@ def load_data():
 
 agg = load_data()
 
+RESOLUTION = 8
+
+# Create H3 index for each grid cell
+agg["h3_index"] = agg.apply(
+    lambda row: h3.geo_to_h3(row["lat_grid"], row["lon_grid"], RESOLUTION),
+    axis=1
+)
+
+# Cyclical encoding of mean hour
+if "mean_hour" in agg.columns:
+    agg["hour_sin"] = np.sin(2 * np.pi * agg["mean_hour"] / 24)
+    agg["hour_cos"] = np.cos(2 * np.pi * agg["mean_hour"] / 24)
+else:
+    agg["hour_sin"] = 0
+    agg["hour_cos"] = 0
+
+# Set H3 index as index for efficient lookup
+agg.set_index("h3_index", inplace=True)
+
 # Load ML artifacts
 @st.cache_resource
 def load_models():
@@ -88,11 +112,21 @@ def load_models():
     return reg_model, clf_model, scaler, le_top
 
 reg_model, clf_model, scaler, le_top = load_models()
+@st.cache_resource
+def get_explainer(model):
+    return shap.TreeExplainer(model)
 
+explainer = get_explainer(reg_model)
 def predict_risk_local(lat, lon, hour, top_crime_type):
 
-    nearest = agg.loc[((agg['lat_grid'] - lat).abs() +
-                       (agg['lon_grid'] - lon).abs()).idxmin()]
+    # Efficient spatial lookup using H3
+    cell = h3.geo_to_h3(lat, lon, RESOLUTION)
+
+    if cell in agg.index:
+        nearest = agg.loc[cell]
+    else:
+        # fallback if cell not found
+        nearest = agg.iloc[0]
 
     if top_crime_type not in le_top.classes_:
         safe_type = le_top.classes_[0]
@@ -101,25 +135,40 @@ def predict_risk_local(lat, lon, hour, top_crime_type):
 
     top_code = int(le_top.transform([safe_type])[0])
 
+    # Cyclical time encoding
+    hour_sin = np.sin(2 * np.pi * hour / 24)
+    hour_cos = np.cos(2 * np.pi * hour / 24)
+
     features = [[
         nearest["total_crimes"],
         nearest["unique_crime_types"],
-        hour if 0 <= hour <= 23 else 12,
-        nearest.get("std_hour", 0),
+        hour_sin,
+        hour_cos,
         nearest.get("night_prop", 0)
     ]]
 
     features_scaled = scaler.transform(features)
 
-    import numpy as np
     X_input = np.hstack([features_scaled, [[top_code]]])
 
+    # Regression
     risk_score = float(reg_model.predict(X_input)[0])
-    risk_type_code = int(clf_model.predict(X_input)[0])
 
+    # Classification probabilities
+    probs = clf_model.predict_proba(X_input)[0]
+    risk_type_code = int(np.argmax(probs))
     risk_type_label = ["low", "medium", "high"][risk_type_code]
+    confidence = float(np.max(probs))
 
-    return risk_score, risk_type_label, nearest
+    return risk_score, risk_type_label, confidence, nearest, X_input
+@st.cache_data
+def compute_hour_curve(lat, lon, crime):
+    hours = np.arange(24)
+    risks = []
+    for h in hours:
+        score, _, _, _, _ = predict_risk_local(lat, lon, h, crime)
+        risks.append(score)
+    return hours, risks
 
 if agg is None:
     st.error("⚠️ Could not load data. Please run crime_pipeline_fixed.py first!")
@@ -191,8 +240,13 @@ st.session_state.selected_lon = selected_lon
 st.session_state.selected_hour = selected_hour
 
 # Tabs
-tab1, tab2, tab3, tab4 = st.tabs(["🗺️ Interactive Map", "📊 Analytics", "🎯 Prediction Details", "📈 Insights"])
-
+tab1, tab2, tab3, tab4, tab5 = st.tabs([
+    "🗺️ Interactive Map",
+    "📊 Analytics",
+    "🎯 Prediction Details",
+    "📈 Insights",
+    "🧠 Model Explainability"
+])
 with tab1:
     st.subheader("🗺️ Crime Risk Heat Map - Click on map to update location")
     
@@ -225,11 +279,7 @@ with tab1:
                     "orange" if r["risk_type"] == "medium" else 
                     "green"
             )
-        ).add_to(m)
-
-
-
-    
+        ).add_to(m) 
     folium.Marker(
         location=[selected_lat, selected_lon],
         popup="📍 Selected Location",
@@ -245,9 +295,12 @@ with tab1:
 
         if clicked_lat and clicked_lon:
             # Find nearest point from aggregated data
-            nearest_idx = ((agg["lat_grid"] - clicked_lat).abs() + (agg["lon_grid"] - clicked_lon).abs()).idxmin()
-            nearest_row = agg.loc[nearest_idx]
-
+            cell = h3.geo_to_h3(clicked_lat, clicked_lon, RESOLUTION)
+            
+            if cell in agg.index:
+                nearest_row = agg.loc[cell]
+            else:
+                nearest_row = agg.iloc[0]
             # Update session state
             st.session_state.selected_lat = float(nearest_row["lat_grid"])
             st.session_state.selected_lon = float(nearest_row["lon_grid"])
@@ -303,18 +356,24 @@ with tab2:
         st.plotly_chart(fig2, use_container_width=True)
     
     st.subheader("⏰ Crime Risk by Time of Day")
+    hours, risks = compute_hour_curve(
+    selected_lat,
+    selected_lon,
+    selected_crime
+    )    
     hour_data = pd.DataFrame({
-        'Hour': range(24),
-        'Relative Risk': [0.3, 0.2, 0.15, 0.1, 0.1, 0.15, 0.3, 0.5, 0.6, 0.5, 0.4, 0.4,
-                         0.45, 0.5, 0.55, 0.6, 0.7, 0.8, 0.9, 0.95, 0.9, 0.7, 0.5, 0.4]
+        "Hour": hours,
+        "Predicted Risk": risks
     })
+    
     fig3 = px.line(
         hour_data,
         x='Hour',
-        y='Relative Risk',
-        title='Crime Risk Pattern Throughout the Day',
+        y='Predicted Risk',
+        title='Learned Crime Risk Pattern Throughout the Day',
         markers=True
     )
+    
     fig3.update_traces(line_color='#FF4B4B', line_width=3)
     fig3.update_layout(height=300)
     st.plotly_chart(fig3, use_container_width=True)
@@ -325,17 +384,18 @@ with tab3:
     if predict_clicked:
         with st.spinner("🔄 Analyzing crime risk..."):
             try:
-                score, label, nearest = predict_risk_local(
-                    selected_lat,
-                    selected_lon,
-                    selected_hour,
-                    selected_crime
-                )
+                score, label, confidence, nearest, X_input = predict_risk_local(
+                        selected_lat,
+                        selected_lon,
+                        selected_hour,
+                        selected_crime
+                    )
     
                 st.session_state.prediction_result = {
                     "prediction": {
                         "risk_score": score,
-                        "risk_type": label
+                        "risk_type": label,
+                        "confidence": confidence
                     },
                     "nearest_grid": nearest.to_dict()
                 }
@@ -344,11 +404,34 @@ with tab3:
                 st.error(f"Prediction error: {e}")
                 st.session_state.prediction_result = None    
     if st.session_state.prediction_result:
+        st.subheader("🧠 SHAP Local Explanation")
+
+        #explainer = shap.TreeExplainer(reg_model)
+        shap_values = explainer.shap_values(X_input)
+        
+        feature_names = [
+            "Total Crimes",
+            "Unique Crime Types",
+            "Hour Sin",
+            "Hour Cos",
+            "Night Prop",
+            "Crime Type Code"
+        ]
+        
+        fig_shap = px.bar(
+            x=shap_values[0],
+            y=feature_names,
+            orientation='h',
+            title="Feature Impact on Risk Score"
+        )
+        
+        st.plotly_chart(fig_shap, use_container_width=True)
         data = st.session_state.prediction_result
         pred = data["prediction"]
         
         risk_type = pred['risk_type'].upper()
         risk_score = pred['risk_score']
+        confidence = pred["confidence"]
         
         if risk_type == "HIGH":
             st.markdown(f'<div class="risk-high">⚠️ HIGH RISK AREA - Score: {risk_score:.2%}</div>', unsafe_allow_html=True)
@@ -356,7 +439,7 @@ with tab3:
             st.markdown(f'<div class="risk-medium">⚡ MEDIUM RISK AREA - Score: {risk_score:.2%}</div>', unsafe_allow_html=True)
         else:
             st.markdown(f'<div class="risk-low">✅ LOW RISK AREA - Score: {risk_score:.2%}</div>', unsafe_allow_html=True)
-        
+        st.metric("Model Confidence", f"{confidence*100:.1f}%")
         st.divider()
         
         col1, col2, col3 = st.columns(3)
@@ -443,6 +526,60 @@ with tab4:
             **Total Crimes:** {row['total_crimes']}
             ---
             """)
+with tab5:
+    st.subheader("🌍 Global SHAP Summary")
+
+    base_features = agg[[
+        "total_crimes",
+        "unique_crime_types",
+        "hour_sin",
+        "hour_cos",
+        "night_prop"
+    ]]
+    
+    scaled_features = scaler.transform(base_features)
+
+    # Add dummy crime type column (use 0 for global visualization)
+    crime_code_column = np.zeros((scaled_features.shape[0], 1))
+
+    sample_data = np.hstack([scaled_features, crime_code_column])
+
+    #explainer = shap.TreeExplainer(reg_model)
+    shap_values_global = explainer.shap_values(sample_data)
+
+    fig, ax = plt.subplots()
+    shap.summary_plot(
+        shap_values_global,
+        sample_data,
+        feature_names=[
+            "Total Crimes",
+            "Unique Crime Types",
+            "Hour Sin",
+            "Hour Cos",
+            "Night Prop",
+            "Crime Type Code"
+        ],
+        show=False
+    )
+    st.pyplot(fig)
+
+    st.subheader("📉 Partial Dependence Plots")
+
+    fig_pdp, ax = plt.subplots(figsize=(8, 6))
+    
+    PartialDependenceDisplay.from_estimator(
+        reg_model,
+        sample_data,
+        features=[0, 1, 2],
+        feature_names=[
+            "Total Crimes",
+            "Unique Crime Types",
+            "Hour Sin"
+        ],
+        ax=ax
+    )
+    
+    st.pyplot(fig_pdp)
 
 st.divider()
 st.caption("🔒 Crime Risk Prediction Dashboard | Built with Streamlit & ML")
