@@ -531,7 +531,7 @@ with tab5:
         "hour_sin",
         "hour_cos",
         "night_prop"
-    ]]
+    ]].values
     
     scaled_features = scaler.transform(base_features)
 
