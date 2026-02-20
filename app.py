@@ -119,10 +119,11 @@ def predict_risk_local(lat, lon, hour, top_crime_type):
     cell = h3.latlng_to_cell(lat, lon, RESOLUTION)
 
     if cell in agg.index:
-        nearest = agg.loc[cell]
+        nearest_row = agg.loc[cell]
+        if isinstance(nearest_row, pd.DataFrame):
+            nearest_row = nearest_row.iloc[0]
     else:
-        # fallback if cell not found
-        nearest = agg.iloc[0]
+        nearest_row = agg.iloc[0]
 
     if top_crime_type not in le_top.classes_:
         safe_type = le_top.classes_[0]
@@ -295,6 +296,8 @@ with tab1:
             
             if cell in agg.index:
                 nearest_row = agg.loc[cell]
+                if isinstance(nearest_row, pd.DataFrame):
+                    nearest_row = nearest_row.iloc[0]
             else:
                 nearest_row = agg.iloc[0]
             # Update session state
